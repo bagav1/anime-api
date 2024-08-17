@@ -49,38 +49,6 @@ ANIME_URL = "https://animeflv.net/anime/"
 BASE_EPISODE_IMG_URL = "https://cdn.animeflv.net/screenshots/"
 
 
-@dataclass
-class EpisodeInfo:
-    id: Union[str, int]
-    anime: str
-    image_preview: Optional[str] = None
-
-
-@dataclass
-class AnimeInfo:
-    id: Union[str, int]
-    title: str
-    poster: Optional[str] = None
-    banner: Optional[str] = None
-    synopsis: Optional[str] = None
-    rating: Optional[str] = None
-    genres: Optional[List[str]] = None
-    debut: Optional[str] = None
-    type: Optional[str] = None
-    episodes: Optional[List[EpisodeInfo]] = None
-
-
-@dataclass
-class DownloadLinkInfo:
-    server: str
-    url: str
-
-
-class EpisodeFormat(Flag):
-    Subtitled = auto()
-    Dubbed = auto()
-
-
 class AnimeFLV(object):
     def __init__(self, *args, **kwargs):
         session = kwargs.get("session", None)
@@ -153,19 +121,19 @@ class AnimeFLV(object):
         except Exception as exc:
             raise AnimeFLVParseError(exc)
 
-    def list(self, page: int = None) -> List[Dict[str, str]]:
+    def list(self, page: int = None) -> ListAnime:
         """
         Shortcut for search(query=None)
         """
 
         return self.search(page=page)
 
-    def search(self, query: str = None, page: int = None) -> List[AnimeInfo]:
+    def search(self, query: str = None, page: int = None) -> ListAnime:
         """
         Search in animeflv.net by query.
         :param query: Query information like: 'Nanatsu no Taizai'.
         :param page: Page of the information return.
-        :rtype: list[AnimeInfo]
+        :rtype: ListAnime
         """
 
         if page is not None and not isinstance(page, int):
@@ -190,7 +158,21 @@ class AnimeFLV(object):
         if elements is None:
             raise AnimeFLVParseError("Unable to get list of animes")
 
-        return self._process_anime_list_info(elements)
+        pagination = soup.select("div.Container div.NvCnAnm ul.pagination li")
+
+        cuurrent_page = 1
+        total_pages = 1
+
+        if len(pagination) > 1:
+            cuurrent_page = soup.select_one("div.Container div.NvCnAnm ul.pagination li.active a").string
+            total_pages = soup.select("div.Container div.NvCnAnm ul.pagination li")[-2].string
+
+
+        return ListAnime(
+            current_page=int(cuurrent_page),
+            total_pages=int(total_pages) if int(total_pages) <= 150 else 150,
+            data=self._process_anime_list_info(elements),
+        )
 
     def get_video_servers(
         self,
@@ -257,7 +239,7 @@ class AnimeFLV(object):
 
         return ret
 
-    def get_latest_animes(self) -> List[AnimeInfo]:
+    def get_latest_animes(self) -> List[AnimeShortInfo]:
         """
         Get a list of new animes released.
         Return a list
@@ -333,16 +315,15 @@ class AnimeFLV(object):
                     data = contents.split("var episodes = ")[1].split(";")[0]
                     episodes_data.extend(json.loads(data))
 
-            AnimeThumbnailsId = info_ids[0][0]
-            animeId = info_ids[0][2]
-            # nextEpisodeDate = info_ids[0][3] if len(info_ids[0]) > 4 else None
+            next_episode = info_ids[0][3] if len(info_ids[0]) > 3 else None
+            status = soup.select_one("body div div div div div aside p.AnmStts").string
 
             for episode, _ in episodes_data:
                 episodes.append(
                     EpisodeInfo(
-                        id=episode,
+                        id=str(episode),
                         anime=id,
-                        image_preview=f"{BASE_EPISODE_IMG_URL}{AnimeThumbnailsId}/{episode}/th_3.jpg",
+                        image_preview=f"{BASE_EPISODE_IMG_URL}{info_ids[0][0]}/{str(episode)}/th_3.jpg",
                     )
                 )
 
@@ -351,12 +332,14 @@ class AnimeFLV(object):
 
         return AnimeInfo(
             id=id,
-            episodes=episodes,
-            genres=genres,
             **information,
+            genres=genres,
+            status=status,
+            next_episode=next_episode,
+            episodes=episodes,
         )
 
-    def _process_anime_list_info(self, elements: ResultSet) -> List[AnimeInfo]:
+    def _process_anime_list_info(self, elements: ResultSet[Tag]) -> List[AnimeShortInfo]:
         ret = []
 
         for element in elements:

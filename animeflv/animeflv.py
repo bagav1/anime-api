@@ -1,46 +1,22 @@
-import cloudscraper
-import json, re
-
-from typing import Dict, List, Optional, Tuple, Type, Union
+import json
+import re
 from types import TracebackType
-from bs4 import BeautifulSoup, Tag, ResultSet
+from typing import Dict, List, Optional, Type, Union
 from urllib.parse import unquote, urlencode
-from enum import Flag, auto
-from .exception import AnimeFLVParseError
-from dataclasses import dataclass
 
+import cloudscraper
+from bs4 import BeautifulSoup, ResultSet, Tag
 
-def removeprefix(str: str, prefix: str) -> str:
-    """
-    Remove the prefix of a given string if it contains that
-    prefix for compatability with Python >3.9
-
-    :param _str: string to remove prefix from.
-    :param episode: prefix to remove from the string.
-    :rtype: str
-    """
-
-    if type(str) is type(prefix):
-        if str.startswith(prefix):
-            return str[len(prefix) :]
-        else:
-            return str[:]
-
-
-def parse_table(table: Tag):
-    columns = list([x.string for x in table.thead.tr.find_all("th")])
-    rows = []
-
-    for row in table.tbody.find_all("tr"):
-        values = row.find_all("td")
-
-        if len(values) != len(columns):
-            raise AnimeFLVParseError("Don't match values size with columns size")
-
-        rows.append({h: x for h, x in zip(columns, values)})
-
-    return rows
-
+from animeflv.exception import AnimeFLVParseError
+from animeflv.schema import (
+    AnimeInfo,
+    AnimeShortInfo,
+    DownloadLinkInfo,
+    EpisodeFormat,
+    EpisodeInfo,
+    ListAnime,
+)
+from animeflv.utils import parse_table, removeprefix, safe_strip
 
 BASE_URL = "https://animeflv.net"
 BROWSE_URL = "https://animeflv.net/browse"
@@ -86,10 +62,11 @@ class AnimeFLV(object):
             ...
         ]
 
-        :param id: Anime id, like as 'nanatsu-no-taizai'.
-        :param episode: Episode id, like as '1'.
+        :param id (str): Anime id, like as 'nanatsu-no-taizai'.
+        :param episode (Union[str, int]): Episode id, like as '1'.
+        :param format (EpisodeFormat): Format of the episode.
         :param **kwargs: Optional arguments for filter output (see doc).
-        :rtype: list
+        :return List[DownloadLinkInfo]:
         """
         response = self._scraper.get(f"{ANIME_VIDEO_URL}{id}-{episode}")
         soup = BeautifulSoup(response.text, "lxml")
@@ -119,7 +96,7 @@ class AnimeFLV(object):
 
             return ret
         except Exception as exc:
-            raise AnimeFLVParseError(exc)
+            raise AnimeFLVParseError(exc) from exc
 
     def list(self, page: int = None) -> ListAnime:
         """
@@ -235,7 +212,7 @@ class AnimeFLV(object):
                     )
                 )
             except Exception as exc:
-                raise AnimeFLVParseError(exc)
+                raise AnimeFLVParseError(exc) from exc
 
         return ret
 
@@ -268,31 +245,16 @@ class AnimeFLV(object):
         response = self._scraper.get(f"{ANIME_URL}/{id}")
         soup = BeautifulSoup(response.text, "lxml")
 
+        image = BASE_URL + "/" + soup.select_one("body div div div div div aside div.AnimeCover div.Image figure img").get("src", "")
         information = {
-            "title": soup.select_one(
-                "body div.Wrapper div.Body div div.Ficha.fchlt div.Container h1.Title"
-            ).string,
-            "poster": BASE_URL
-            + "/"
-            + soup.select_one(
-                "body div div div div div aside div.AnimeCover div.Image figure img"
-            ).get("src", ""),
-            "synopsis": soup.select_one(
-                "body div div div div div main section div.Description p"
-            ).string.strip(),
-            "rating": soup.select_one(
-                "body div div div.Ficha.fchlt div.Container div.vtshr div.Votes span#votes_prmd"
-            ).string,
-            "debut": soup.select_one(
-                "body div.Wrapper div.Body div div.Container div.BX.Row.BFluid.Sp20 aside.SidebarA.BFixed p.AnmStts"
-            ).string,
-            "type": soup.select_one(
-                "body div.Wrapper div.Body div div.Ficha.fchlt div.Container span.Type"
-            ).string,
+            "title": soup.select_one("body div.Wrapper div.Body div div.Ficha.fchlt div.Container h1.Title").string,
+            "type": soup.select_one("body div.Wrapper div.Body div div.Ficha.fchlt div.Container span.Type").string,
+            "rating": soup.select_one("body div div div.Ficha.fchlt div.Container div.vtshr div.Votes span#votes_prmd").string,
+            "poster": image,
+            "banner": image.replace("covers", "banners"),
+            "synopsis": safe_strip(soup.select_one("body div div div div div main section div.Description p").string),
         }
-        information["banner"] = (
-            information["poster"].replace("covers", "banners").strip()
-        )
+
         genres = []
 
         for element in soup.select("main.Main section.WdgtCn nav.Nvgnrs a"):
@@ -328,7 +290,7 @@ class AnimeFLV(object):
                 )
 
         except Exception as exc:
-            raise AnimeFLVParseError(exc)
+            raise AnimeFLVParseError(exc) from exc
 
         return AnimeInfo(
             id=id,
@@ -344,42 +306,19 @@ class AnimeFLV(object):
 
         for element in elements:
             try:
+                image = element.select_one("a div.Image figure img").get("src", None) or element.select_one("a div.Image figure img")["data-cfsrc"]
                 ret.append(
-                    AnimeInfo(
-                        id=removeprefix(
-                            element.select_one("div.Description a.Button")["href"][1:],
-                            "anime/",
-                        ),
+                    AnimeShortInfo(
+                        id=removeprefix(element.select_one("div.Description a.Button")["href"][1:], "anime/"),
                         title=element.select_one("a h3").string,
-                        poster=(
-                            element.select_one("a div.Image figure img").get(
-                                "src", None
-                            )
-                            or element.select_one("a div.Image figure img")["data-cfsrc"]
-                        ),
-                        banner=(
-                            element.select_one("a div.Image figure img").get(
-                                "src", None
-                            )
-                            or element.select_one("a div.Image figure img")["data-cfsrc"]
-                        )
-                        .replace("covers", "banners")
-                        .strip(),
                         type=element.select_one("div.Description p span.Type").string,
-                        synopsis=(
-                            element.select("div.Description p")[1].string.strip()
-                            if element.select("div.Description p")[1].string
-                            else None
-                        ),
                         rating=element.select_one("div.Description p span.Vts").string,
-                        debut=(
-                            element.select_one("a span.Estreno").string.lower()
-                            if element.select_one("a span.Estreno")
-                            else None
-                        ),
+                        poster=image,
+                        banner=image.replace("covers", "banners"),
+                        synopsis=safe_strip(element.select("div.Description p")[1].string),
                     )
                 )
             except Exception as exc:
-                raise AnimeFLVParseError(exc)
+                raise AnimeFLVParseError(exc) from exc
 
         return ret

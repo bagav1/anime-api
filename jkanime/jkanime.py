@@ -50,6 +50,15 @@ class JKAnime(object):
         self.close()
 
     def list(self, page: int = 1) -> AnimeList:
+        """
+        Retrieves a list of anime from the JKAnime directory.
+
+        Args:
+            page (int): The page number to retrieve (default is 1).
+
+        Returns:
+            AnimeList: A list of anime information, including the current page number, whether it's the last page, and a list of AnimeShortInfo objects.
+        """
         url = f"{DIRECTORY_URL}/{page}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -79,6 +88,16 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def search(self, query: str = None, page: int = 1) -> AnimeList:
+        """
+        Searches for anime based on the provided query and returns a list of anime information.
+
+        Args:
+            query (str): The search query to use (default is None).
+            page (int): The page number to retrieve (default is 1).
+
+        Returns:
+            AnimeList: A list of anime information, including the current page number, whether it's the last page, and a list of AnimeShortInfo objects.
+        """
         url = f"{SEARCH_URL}/{query}/{page}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -109,6 +128,15 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def get_latest_animes(self) -> LastAnimes:
+        """
+        Retrieves the latest anime information from the JKAnime website and returns it as a LastAnimes object.
+
+        Returns:
+            LastAnimes: An object containing a list of AnimeShortInfo objects representing the latest anime information.
+
+        Raises:
+            JKAnimeParseError: If there is an error parsing the response from the website.
+        """
         url = BASE_URL
 
         response = self._scraper.get(url)
@@ -135,6 +163,15 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def get_latest_episodes(self) -> LastEpisodes:
+        """
+        Retrieves the latest episodes information from the JKAnime website and returns it as a LastEpisodes object.
+
+        Returns:
+            LastEpisodes: An object containing a list of EpisodeInfo objects representing the latest episodes information.
+
+        Raises:
+            JKAnimeParseError: If there is an error parsing the response from the website.
+        """
         response = self._scraper.get(BASE_URL)
         soup = BeautifulSoup(response.text, "lxml")
 
@@ -156,6 +193,15 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def get_schedule(self) -> ListSchedule:
+        """
+        Retrieves the schedule of anime broadcasts from the JKAnime website and returns it as a ListSchedule object.
+
+        Returns:
+            ListSchedule: An object containing a list of Schedule objects representing the schedule information.
+
+        Raises:
+            JKAnimeParseError: If there is an error parsing the response from the website.
+        """
         response = self._scraper.get(SCHEDULE_URL)
         soup = BeautifulSoup(response.text, "lxml")
 
@@ -187,6 +233,18 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def get_anime_info(self, id: str) -> AnimeInfo:
+        """
+        Retrieves detailed information about an anime from the JKAnime website.
+
+        Args:
+            id (str): The unique identifier of the anime.
+
+        Returns:
+            AnimeInfo: A data structure containing detailed information about the anime.
+
+        Raises:
+            JKAnimeParseError: If there is an error parsing the response from the website.
+        """
         url = f"{BASE_URL}/{id}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -251,6 +309,19 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def get_video_stream(self, id: str, episode: int = 1) -> EpisodeVideoUrls:
+        """
+        Retrieves the video stream URLs for a specific anime episode.
+
+        Args:
+            id (str): The unique identifier of the anime.
+            episode (int): The episode number of the anime (default is 1).
+
+        Returns:
+            EpisodeVideoUrls: A list of video stream URLs for the specified anime episode.
+
+        Raises:
+            JKAnimeParseError: If there is an error parsing the response from the website.
+        """
         url = f"{BASE_URL}/{id}/{episode}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -289,6 +360,16 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def get_links(self, id: str, episode: int = 1) -> EpisodeVideoUrls:
+        """
+        Retrieves a list of video URLs for a given anime episode.
+
+        Args:
+            id (str): The ID of the anime.
+            episode (int, optional): The episode number. Defaults to 1.
+
+        Returns:
+            EpisodeVideoUrls: A list of video URLs for the specified episode.
+        """
         url = f"{BASE_URL}/{id}/{episode}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -316,6 +397,16 @@ class JKAnime(object):
             raise JKAnimeParseError(exc) from exc
 
     def __stream_url(self, html_content: str, hostnames: List[str]) -> Optional[str]:
+        """
+        Extracts a stream URL from the given HTML content.
+
+        Args:
+            html_content (str): The HTML content to extract the stream URL from.
+            hostnames (List[str]): A list of hostnames to search for in the HTML content.
+
+        Returns:
+            Optional[str]: The extracted stream URL, or None if no URL is found.
+        """
         soup = BeautifulSoup(html_content, "lxml")
 
         try:

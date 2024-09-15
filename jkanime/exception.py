@@ -1,0 +1,2 @@
+class JKAnimeParseError(Exception):
+    pass

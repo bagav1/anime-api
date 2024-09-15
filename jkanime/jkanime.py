@@ -6,6 +6,17 @@ from typing import List, Optional, Type
 import cloudscraper
 from bs4 import BeautifulSoup
 
+from jkanime.schema import (
+    AnimeInfo,
+    AnimeList,
+    AnimeShortInfo,
+    EpisodeInfo,
+    EpisodeVideoUrls,
+    LastAnimes,
+    LastEpisodes,
+    ListSchedule,
+    Schedule,
+)
 from jkanime.utils import removeprefix, safe_strip
 
 BASE_URL = "https://jkanime.net"
@@ -37,7 +48,7 @@ class JKAnime(object):
     ) -> None:
         self.close()
 
-    def list(self, page: int = 1):
+    def list(self, page: int = 1) -> AnimeList:
         url = f"{DIRECTORY_URL}/{page}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -51,20 +62,20 @@ class JKAnime(object):
 
         animes = []
         for element in elements:
-            information = {
-                "id": removeprefix(element.select_one("div.custom_thumb2 .card-title a").get("href"), BASE_URL).replace("/", ""),
-                "title": safe_strip(element.select_one("div.custom_thumb2 .card-title a").text),
-                "poster": element.select_one("div.custom_thumb2 img").get("src"),
-                "type": safe_strip(element.select_one("div.card-body div.card-info p.card-txt").text),
-                "status": safe_strip(element.select_one("div.card-body div.card-info p.card-status").text),
-                "synopsis": safe_strip(element.select_one("div.card-body p.synopsis").text),
-            }
+            information = AnimeShortInfo(
+                id=removeprefix(element.select_one("div.custom_thumb2 .card-title a").get("href"), BASE_URL),
+                title=safe_strip(element.select_one("div.custom_thumb2 .card-title a").text),
+                poster=element.select_one("div.custom_thumb2 img").get("src"),
+                type=safe_strip(element.select_one("div.card-body div.card-info p.card-txt").text),
+                status=safe_strip(element.select_one("div.card-body div.card-info p.card-status").text),
+                synopsis=safe_strip(element.select_one("div.card-body p.synopsis").text),
+            )
 
             animes.append(information)
 
-        return {"current_page": page, "last_page": last_page, "data": animes}
+        return AnimeList(current_page=page, last_page=last_page, data=animes)
 
-    def search(self, query: str = None, page: int = 1):
+    def search(self, query: str = None, page: int = 1) -> AnimeList:
         url = f"{SEARCH_URL}/{query}/{page}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -78,20 +89,20 @@ class JKAnime(object):
 
         animes = []
         for element in elements:
-            information = {
-                "id": removeprefix(element.select_one("div.anime__item__text a").get("href"), BASE_URL).replace("/", ""),
-                "title": safe_strip(element.select_one("div#ainfo div.title").text),
-                "poster": element.select_one("div.anime__item__pic").get("data-setbg"),
-                "type": safe_strip(element.select_one("div.anime__item__text li.anime").text),
-                "status": safe_strip(element.select_one("div.anime__item__text ul li").text),
-                "synopsis": safe_strip(element.select_one("div#ainfo p").text),
-            }
+            information = AnimeShortInfo(
+                id=removeprefix(element.select_one("div.anime__item__text a").get("href"), BASE_URL).replace("/", ""),
+                title=safe_strip(element.select_one("div#ainfo div.title").text),
+                poster=element.select_one("div.anime__item__pic").get("data-setbg"),
+                type=safe_strip(element.select_one("div.anime__item__text li.anime").text),
+                status=safe_strip(element.select_one("div.anime__item__text ul li").text),
+                synopsis=safe_strip(element.select_one("div#ainfo p").text),
+            )
 
             animes.append(information)
 
-        return {"current_page": page, "last_page": last_page, "data": animes}
+        return AnimeList(current_page=page, last_page=last_page, data=animes)
 
-    def get_latest_animes(self):
+    def get_latest_animes(self) -> LastAnimes:
         url = BASE_URL
 
         response = self._scraper.get(url)
@@ -101,20 +112,20 @@ class JKAnime(object):
 
         animes = []
         for element in elements:
-            information = {
-                "id": removeprefix(element.select_one("div.anime__item__text a").get("href"), BASE_URL).replace("/", ""),
-                "title": safe_strip(element.select_one("div.anime__item__text a").text),
-                "poster": element.select_one("div.anime__item__pic")["data-setbg"],
-                "type": safe_strip(element.select_one("div.anime__item__text ul li.anime").text),
-                "status": safe_strip(element.select_one("div.anime__item__text ul li:first-child").text),
-                "synopsis": None,
-            }
+            information = AnimeShortInfo(
+                id=removeprefix(element.select_one("div.anime__item__text a").get("href"), BASE_URL).replace("/", ""),
+                title=safe_strip(element.select_one("div.anime__item__text a").text),
+                poster=element.select_one("div.anime__item__pic")["data-setbg"],
+                type=safe_strip(element.select_one("div.anime__item__text ul li.anime").text),
+                status=safe_strip(element.select_one("div.anime__item__text ul li:first-child").text),
+                synopsis=None,
+            )
 
             animes.append(information)
 
-        return animes
+        return LastAnimes(animes=animes)
 
-    def get_latest_episodes(self):
+    def get_latest_episodes(self) -> LastEpisodes:
         response = self._scraper.get(BASE_URL)
         soup = BeautifulSoup(response.text, "lxml")
 
@@ -123,16 +134,16 @@ class JKAnime(object):
         episodes = []
         for element in elements:
             anime, _, id = removeprefix(element["href"], BASE_URL)[1:-1].rpartition("/")
-            information = {
-                "id": id,
-                "anime": anime,
-                "image": element.select_one("div.anime__sidebar__comment__item__pic img").get("src"),
-            }
+            information = EpisodeInfo(
+                id=id,
+                anime_id=anime,
+                image_preview=element.select_one("div.anime__sidebar__comment__item__pic img")["src"],
+            )
             episodes.append(information)
 
-        return episodes
+        return LastEpisodes(episodes=episodes)
 
-    def get_schedule(self):
+    def get_schedule(self) -> ListSchedule:
         response = self._scraper.get(SCHEDULE_URL)
         soup = BeautifulSoup(response.text, "lxml")
 
@@ -145,22 +156,22 @@ class JKAnime(object):
             for element in elements:
                 episode_id = re.findall(r"\d+", element.select_one("div.last span").text)[0]
                 anime_id = removeprefix(element.select_one("a").get("href"), BASE_URL).replace("/", "")
-                information = {
-                    "id": anime_id,
-                    "title": safe_strip(element.select_one("a").text),
-                    "image": element.select_one("div.boxx img").get("src"),
-                    "last_episode": {
-                        "id": episode_id,
-                        "date": safe_strip(element.select_one("div.last time").text),
-                    },
-                }
+                information = AnimeShortInfo(
+                    id=anime_id,
+                    title=safe_strip(element.select_one("a").text),
+                    poster=element.select_one("div.boxx img").get("src"),
+                    last_episode=EpisodeInfo(
+                        id=episode_id,
+                        anime_id=anime_id,
+                        date=safe_strip(element.select_one("div.last time").text)),
+                )
                 animes.append(information)
 
-            schedule.append({"day": safe_strip(day.select_one("h2").text), "animes": animes})
+            schedule.append(Schedule(day=safe_strip(day.select_one("h2").text), anime=animes))
 
-        return schedule
+        return ListSchedule(schedule=schedule)
 
-    def get_anime_info(self, id: str):
+    def get_anime_info(self, id: str) -> AnimeInfo:
         url = f"{BASE_URL}/{id}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -208,20 +219,20 @@ class JKAnime(object):
 
             episodes.extend(
                 [
-                    {
-                        "id": e["number"],
-                        "anime": id,
-                        "image": "https://cdn.jkdesu.com/assets/images/animes/video/image_thumb/" + e["image"],
-                    }
+                    EpisodeInfo(
+                        id=e["number"],
+                        anime_id=id,
+                        image_preview="https://cdn.jkdesu.com/assets/images/animes/video/image_thumb/" + e["image"],
+                    )
                     for e in resp.json()
                 ]
             )
 
         information["episodes"] = episodes
 
-        return information
+        return AnimeInfo(**information)
 
-    def get_video_stream(self, id: str, episode: int = 1):
+    def get_video_stream(self, id: str, episode: int = 1) -> EpisodeVideoUrls:
         url = f"{BASE_URL}/{id}/{episode}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -254,9 +265,9 @@ class JKAnime(object):
             resp = self._scraper.get(url, headers={"Referer": BASE_URL})
             urls.append(safe_strip(self.__stream_url(resp.text, src_stream)))
 
-        return urls
+        return EpisodeVideoUrls(urls=urls)
 
-    def get_links(self, id: str, episode: int = 1):
+    def get_links(self, id: str, episode: int = 1) -> EpisodeVideoUrls:
         url = f"{BASE_URL}/{id}/{episode}"
 
         response = self._scraper.get(url, headers={"Referer": BASE_URL})
@@ -278,9 +289,9 @@ class JKAnime(object):
                 for cap in caps:
                     urls.append(f"{remote}/d/{cap['slug']}")
 
-        return urls
+        return EpisodeVideoUrls(urls=urls)
 
-    def __stream_url(self, html_content: str, hostnames: List[str]):
+    def __stream_url(self, html_content: str, hostnames: List[str]) -> Optional[str]:
         soup = BeautifulSoup(html_content, "lxml")
 
         dplayer_pattern = r"DPlayer\({.*?}\);"
